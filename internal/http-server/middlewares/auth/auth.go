@@ -97,7 +97,7 @@ func hasRequiredScopes(userScopes, requiredScopes []string) bool {
 	return true
 }
 
-func getUserInfo(r *http.Request) (string, []string) {
+func GetUserInfo(r *http.Request) (string, []string) {
 	userID := r.Header.Get("X-User-ID")
 	scopes := strings.Split(r.Header.Get("X-User-Scopes"), " ")
 	return userID, scopes

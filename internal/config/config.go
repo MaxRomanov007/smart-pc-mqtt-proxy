@@ -10,14 +10,26 @@ import (
 )
 
 type Config struct {
-	Env        string `yaml:"env" env-default:"local"`
-	HTTPServer `yaml:"http_server"`
+	Env         string `yaml:"env" env-default:"local"`
+	*HTTPServer `yaml:"http_server"`
 }
 
 type HTTPServer struct {
 	Address     string        `yaml:"address" env-default:"localhost:8080"`
 	Timeout     time.Duration `yaml:"timeout" env-default:"4s"`
 	IdleTimeout time.Duration `yaml:"idle_timeout" env-default:"60s"`
+	*Cors       `yaml:"cors"`
+}
+
+type Cors struct {
+	AllowedOrigins     []string `yaml:"allowed_origins"`
+	AllowedMethods     []string `yaml:"allowed_methods"`
+	AllowedHeaders     []string `yaml:"allowed_headers"`
+	ExposedHeaders     []string `yaml:"exposed_headers"`
+	AllowCredentials   bool     `yaml:"allow_credentials" env-default:"false"`
+	MaxAge             int      `yaml:"max_age" env-default:"300"`
+	OptionsPassthrough bool     `yaml:"options" env-default:"false"`
+	Debug              bool     `yaml:"debug" env-default:"false"`
 }
 
 func MustLoad() *Config {
