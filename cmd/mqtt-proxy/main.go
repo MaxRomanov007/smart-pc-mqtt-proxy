@@ -1,12 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"smart-pc-mqtt-proxy/internal/config"
+	"smart-pc-mqtt-proxy/internal/lib/logger"
 )
 
 func main() {
 	cfg := config.MustLoad()
+	log := logger.SetupLogger(cfg.Env)
 
-	fmt.Println(cfg)
+	log.Debug("debug messages are enabled")
 }
