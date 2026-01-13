@@ -34,7 +34,9 @@ func New(log *slog.Logger, cfg *config.Config) (*Server, error) {
 	router.Use(middleware.Recoverer)
 	router.Use(corsHandler(cfg.HTTPServer.Cors))
 
-	router.With(mwAuth.New(log, "mqtt")).Get("/", connect.New())
+	for pattern, route := range cfg.Routes {
+		router.With(mwAuth.New(log, route.AdditionalScopes...)).Get(pattern, connect.New(log, route))
+	}
 
 	srv := &http.Server{
 		Addr:         cfg.Address,

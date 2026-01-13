@@ -12,6 +12,7 @@ import (
 type Config struct {
 	Env         string `yaml:"env" env-default:"local"`
 	*HTTPServer `yaml:"http_server"`
+	Routes      map[string]*ProxyRoute `yaml:"routes"`
 }
 
 type HTTPServer struct {
@@ -30,6 +31,12 @@ type Cors struct {
 	MaxAge             int      `yaml:"max_age" env-default:"300"`
 	OptionsPassthrough bool     `yaml:"options" env-default:"false"`
 	Debug              bool     `yaml:"debug" env-default:"false"`
+}
+
+type ProxyRoute struct {
+	Topic            string   `yaml:"topic" env-required:"true"`
+	RequiredScope    string   `yaml:"required_scope"`
+	AdditionalScopes []string `yaml:"additional_scopes"`
 }
 
 func MustLoad() *Config {

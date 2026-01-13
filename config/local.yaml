@@ -4,11 +4,15 @@ http_server:
   timeout: 4s
   idle_timeout: 60s
   cors:
-    allowed_origins: ["https://*", "http://*"]
-    allowed_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    allowed_headers: ["Accept", "Authorization", "Content-Type", "X-CSRF-Token"]
-    exposed_headers: ["Link"]
+    allowed_origins: [ "https://*", "http://*" ]
+    allowed_methods: [ "GET", "POST", "PUT", "DELETE", "OPTIONS" ]
+    allowed_headers: [ "Accept", "Authorization", "Content-Type", "X-CSRF-Token" ]
+    exposed_headers: [ "Link" ]
     allow_credentials: false
     max_age: 300
     options: false
     debug: false
+routes:
+  /pc:
+    topic: "pc"
+    required_scope: "mqtt:pc"
