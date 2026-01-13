@@ -13,6 +13,7 @@ type Config struct {
 	Env         string `yaml:"env" env-default:"local"`
 	*HTTPServer `yaml:"http_server"`
 	Routes      map[string]*ProxyRoute `yaml:"routes"`
+	*Websocket  `yaml:"websocket"`
 }
 
 type HTTPServer struct {
@@ -37,6 +38,14 @@ type ProxyRoute struct {
 	Topic            string   `yaml:"topic" env-required:"true"`
 	RequiredScope    string   `yaml:"required_scope"`
 	AdditionalScopes []string `yaml:"additional_scopes"`
+}
+
+type Websocket struct {
+	HandshakeTimeout  time.Duration `yaml:"handshake_timeout"`
+	ReadBufferSize    int           `yaml:"read_buffer_size"`
+	WriteBufferSize   int           `yaml:"write_buffer_size"`
+	Subprotocols      []string      `yaml:"subprotocols"`
+	EnableCompression bool          `yaml:"enable_compression" env-default:"false"`
 }
 
 func MustLoad() *Config {

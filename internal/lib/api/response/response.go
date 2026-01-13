@@ -11,6 +11,7 @@ const (
 	StatusUnauthorized
 	StatusForbidden
 	StatusInternalError
+	StatusWebsocketError
 )
 
 func OK() Response {
@@ -56,5 +57,18 @@ func InternalError() Response {
 	return Response{
 		Status: StatusInternalError,
 		Error:  "Internal error",
+	}
+}
+
+func WebsocketError(msg string) Response {
+	if msg == "" {
+		return Response{
+			Status: StatusWebsocketError,
+			Error:  "Websocket error",
+		}
+	}
+	return Response{
+		Status: StatusWebsocketError,
+		Error:  "Websocket error: " + msg,
 	}
 }

@@ -3,6 +3,7 @@ package connect
 import (
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
+	"github.com/gorilla/websocket"
 )
 
 const (
@@ -22,7 +24,7 @@ const (
 	modeReadWrite = "read-write"
 )
 
-func New(log *slog.Logger, route *config.ProxyRoute) http.HandlerFunc {
+func New(log *slog.Logger, route *config.ProxyRoute, upgrader *websocket.Upgrader) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "handlers.proxy.connect"
 
@@ -40,6 +42,33 @@ func New(log *slog.Logger, route *config.ProxyRoute) http.HandlerFunc {
 		}
 
 		log.Info("got subscribe mode", slog.String("mode", subscribeMode))
+
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Error("failed to upgrade to websocket", sl.Err(err))
+			render.JSON(w, r, response.WebsocketError(err.Error()))
+			return
+		}
+
+		reader(ws)
+	}
+}
+
+func reader(conn *websocket.Conn) {
+	for {
+		// read in a message
+		messageType, p, err := conn.ReadMessage()
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		// print out that message for clarity
+		fmt.Println(string(p))
+
+		if err := conn.WriteMessage(messageType, p); err != nil {
+			log.Println(err)
+			return
+		}
 	}
 }
 

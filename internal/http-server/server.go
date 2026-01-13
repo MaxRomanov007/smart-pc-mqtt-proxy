@@ -18,6 +18,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/gorilla/websocket"
 )
 
 type Server struct {
@@ -34,8 +35,12 @@ func New(log *slog.Logger, cfg *config.Config) (*Server, error) {
 	router.Use(middleware.Recoverer)
 	router.Use(corsHandler(cfg.HTTPServer.Cors))
 
+	upgrader := createWebsocketUpgrader(log, cfg.Websocket)
+
 	for pattern, route := range cfg.Routes {
-		router.With(mwAuth.New(log, route.AdditionalScopes...)).Get(pattern, connect.New(log, route))
+		router.
+			With(mwAuth.New(log, route.AdditionalScopes...)).
+			HandleFunc(pattern, connect.New(log, route, upgrader))
 	}
 
 	srv := &http.Server{
@@ -85,4 +90,18 @@ func corsHandler(cfg *config.Cors) func(http.Handler) http.Handler {
 		OptionsPassthrough: cfg.OptionsPassthrough,
 		Debug:              cfg.Debug,
 	})
+}
+
+func createWebsocketUpgrader(log *slog.Logger, cfg *config.Websocket) *websocket.Upgrader {
+	return &websocket.Upgrader{
+		HandshakeTimeout:  cfg.HandshakeTimeout,
+		ReadBufferSize:    cfg.ReadBufferSize,
+		WriteBufferSize:   cfg.WriteBufferSize,
+		Subprotocols:      cfg.Subprotocols,
+		EnableCompression: cfg.EnableCompression,
+		CheckOrigin:       func(r *http.Request) bool { return true },
+		Error: func(w http.ResponseWriter, r *http.Request, status int, reason error) {
+			return
+		},
+	}
 }
