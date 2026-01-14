@@ -15,6 +15,14 @@ http_server:
 websocket:
   read_buffer_size: 1024
   write_buffer_size: 1024
+  timeout:
+    write: 5s
+mqtt:
+  host: localhost
+  port: 1883
+  timeout:
+    subscribe: 5s
+    publish: 5s
 routes:
   /pc:
     topic: "pc"

@@ -14,6 +14,7 @@ type Config struct {
 	*HTTPServer `yaml:"http_server"`
 	Routes      map[string]*ProxyRoute `yaml:"routes"`
 	*Websocket  `yaml:"websocket"`
+	*MQTT       `yaml:"mqtt"`
 }
 
 type HTTPServer struct {
@@ -35,17 +36,34 @@ type Cors struct {
 }
 
 type ProxyRoute struct {
-	Topic            string   `yaml:"topic" env-required:"true"`
-	RequiredScope    string   `yaml:"required_scope"`
-	AdditionalScopes []string `yaml:"additional_scopes"`
+	Topic            string        `yaml:"topic" env-required:"true"`
+	RequiredScope    string        `yaml:"required_scope"`
+	AdditionalScopes []string      `yaml:"additional_scopes"`
+	Deadline         time.Duration `yaml:"deadline" env-default:"1m"`
 }
 
 type Websocket struct {
-	HandshakeTimeout  time.Duration `yaml:"handshake_timeout"`
-	ReadBufferSize    int           `yaml:"read_buffer_size"`
-	WriteBufferSize   int           `yaml:"write_buffer_size"`
-	Subprotocols      []string      `yaml:"subprotocols"`
-	EnableCompression bool          `yaml:"enable_compression" env-default:"false"`
+	HandshakeTimeout  time.Duration    `yaml:"handshake_timeout"`
+	ReadBufferSize    int              `yaml:"read_buffer_size"`
+	WriteBufferSize   int              `yaml:"write_buffer_size"`
+	Subprotocols      []string         `yaml:"subprotocols"`
+	EnableCompression bool             `yaml:"enable_compression" env-default:"false"`
+	Timeout           WebsocketTimeout `yaml:"timeout"`
+}
+
+type WebsocketTimeout struct {
+	Write time.Duration `yaml:"write" env-default:"5s"`
+}
+
+type MQTT struct {
+	Host    string      `yaml:"host" env-required:"true"`
+	Port    int         `yaml:"port" env-default:"1883"`
+	Timeout MQTTTimeout `yaml:"timeout"`
+}
+
+type MQTTTimeout struct {
+	Subscribe time.Duration `yaml:"subscribe" env-default:"5s"`
+	Publish   time.Duration `yaml:"publish" env-default:"5s"`
 }
 
 func MustLoad() *Config {

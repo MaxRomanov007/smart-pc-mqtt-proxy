@@ -40,14 +40,14 @@ func New(log *slog.Logger, cfg *config.Config) (*Server, error) {
 	for pattern, route := range cfg.Routes {
 		router.
 			With(mwAuth.New(log, route.AdditionalScopes...)).
-			HandleFunc(pattern, connect.New(log, route, upgrader))
+			HandleFunc(pattern, connect.New(log, route, upgrader, cfg.MQTT, cfg.Websocket))
 	}
 
 	srv := &http.Server{
 		Addr:         cfg.Address,
 		Handler:      router,
-		ReadTimeout:  cfg.Timeout,
-		WriteTimeout: cfg.Timeout,
+		ReadTimeout:  cfg.HTTPServer.Timeout,
+		WriteTimeout: cfg.HTTPServer.Timeout,
 		IdleTimeout:  cfg.IdleTimeout,
 	}
 
