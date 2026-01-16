@@ -1,6 +1,7 @@
 package connect
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -11,8 +12,10 @@ import (
 	"smart-pc-mqtt-proxy/internal/lib/api/response"
 	"smart-pc-mqtt-proxy/internal/lib/logger/sl"
 	"strings"
+	"text/template"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
 	"github.com/gorilla/websocket"
@@ -31,6 +34,21 @@ func New(
 	mqttCfg *config.MQTT,
 	wsCfg *config.Websocket,
 ) http.HandlerFunc {
+	const op = "handlers.proxy.New"
+
+	log = log.With(slog.String(sl.OpLogKey, op))
+
+	requiredScopeTemplate, err := template.New("requiredScope").Parse(route.RequiredScope)
+	if err != nil {
+		log.Error("failed to create required scope template for route", sl.Err(err), slog.Any("route", route))
+		return nil
+	}
+	topicTemplate, err := template.New("topic").Parse(route.Topic)
+	if err != nil {
+		log.Error("failed to create topic template for route", sl.Err(err), slog.Any("route", route))
+		return nil
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "handlers.proxy.connect"
 
@@ -39,15 +57,33 @@ func New(
 			slog.String(sl.RequestIdLogKey, middleware.GetReqID(r.Context())),
 		)
 
-		userId, userScopes := auth.GetUserInfo(r)
-		subscribeMode, err := getSubscribeMode(route.RequiredScope, userScopes)
+		params, err := urlParams(r, route.Params)
 		if err != nil {
-			log.Warn("failed to get subscribe mode", sl.Err(err))
-			render.JSON(w, r, response.Forbidden("failed to get the subscribe mode"))
+			log.Warn("failed to get url params", sl.Err(err))
+			render.JSON(w, r, response.BadRequest(err.Error()))
 			return
 		}
 
-		log.Info("got subscribe mode", slog.String("mode", subscribeMode))
+		requiredScope, err := executeTemplate(requiredScopeTemplate, params)
+		if err != nil {
+			log.Error("failed to execute required scope template", sl.Err(err))
+			render.JSON(w, r, response.InternalError())
+			return
+		}
+
+		userId, userScopes := auth.GetUserInfo(r)
+		subscribeMode, err := getSubscribeMode(requiredScope, userScopes)
+		if err != nil {
+			if errors.Is(err, ErrMissingRequiredScope) {
+				log.Warn("missing required scope", sl.Err(err))
+				render.JSON(w, r, response.Forbidden("Insufficient scope"))
+				return
+			}
+
+			log.Error("failed to get subscribe mode", sl.Err(err))
+			render.JSON(w, r, response.InternalError())
+			return
+		}
 
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -63,7 +99,20 @@ func New(
 			return
 		}
 
-		topic := "users/" + userId + "/" + route.Topic
+		topic, err := executeTemplate(topicTemplate, params)
+		if err != nil {
+			log.Error("failed to execute topic template", sl.Err(err))
+			render.JSON(w, r, response.InternalError())
+			return
+		}
+
+		topic = "users/" + userId + "/" + topic
+
+		log.Info(
+			"subscribing to topic",
+			slog.String("topic", topic),
+			slog.String("mode", subscribeMode),
+		)
 
 		startSubscribe(
 			r.Context(),
@@ -113,7 +162,7 @@ func getSubscribeMode(requiredScope string, userScopes []string) (string, error)
 		return "", fmt.Errorf(
 			"%s: %w",
 			op,
-			errors.New("required scope is missing in user scopes"),
+			ErrMissingRequiredScope,
 		)
 	}
 
@@ -132,4 +181,36 @@ func getSubscribeMode(requiredScope string, userScopes []string) (string, error)
 			errors.New("unsupported subscribe mode: "+requestedMode),
 		)
 	}
+}
+
+func urlParams(r *http.Request, paramNames []string) (map[string]string, error) {
+	const op = "handlers.proxy.connect.urlParams"
+
+	errs := make([]error, 0, len(paramNames))
+	params := make(map[string]string, len(paramNames))
+	for _, paramName := range paramNames {
+		param := chi.URLParam(r, paramName)
+		if param == "" {
+			errs = append(errs, fmt.Errorf("missing param %q", paramName))
+			continue
+		}
+		params[paramName] = param
+	}
+
+	if len(errs) > 0 {
+		return nil, fmt.Errorf("%s: %w", op, errors.Join(errs...))
+	}
+
+	return params, nil
+}
+
+func executeTemplate(temp *template.Template, data any) (string, error) {
+	const op = "handlers.proxy.connect.executeTemplate"
+
+	var buf bytes.Buffer
+	if err := temp.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("%s: failed to execute template: %w", op, err)
+	}
+
+	return buf.String(), nil
 }

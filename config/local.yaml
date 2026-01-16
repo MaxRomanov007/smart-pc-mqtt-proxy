@@ -1,6 +1,5 @@
 env: "local"
 http_server:
-  address: "localhost:8888"
   timeout: 4s
   idle_timeout: 60s
   cors:
@@ -26,4 +25,9 @@ mqtt:
 routes:
   /pc:
     topic: "pc"
+    required_scope: "mqtt:pc"
+    deadline: 1m
+  /pc/{id}:
+    params: ["id"]
+    topic: "pc/{{.id}}"
     required_scope: "mqtt:pc"

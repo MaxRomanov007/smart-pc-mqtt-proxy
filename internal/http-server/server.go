@@ -38,9 +38,14 @@ func New(log *slog.Logger, cfg *config.Config) (*Server, error) {
 	upgrader := createWebsocketUpgrader(log, cfg.Websocket)
 
 	for pattern, route := range cfg.Routes {
+		handler := connect.New(log, route, upgrader, cfg.MQTT, cfg.Websocket)
+		if handler == nil {
+			continue
+		}
+
 		router.
 			With(mwAuth.New(log, route.AdditionalScopes...)).
-			HandleFunc(pattern, connect.New(log, route, upgrader, cfg.MQTT, cfg.Websocket))
+			Get(pattern, connect.New(log, route, upgrader, cfg.MQTT, cfg.Websocket))
 	}
 
 	srv := &http.Server{

@@ -28,7 +28,7 @@ func New(log *slog.Logger, requiredScopes ...string) func(next http.Handler) htt
 
 			userInfoHeader := r.Header.Get("X-Userinfo")
 			if userInfoHeader == "" {
-				log.Error("Missing user info")
+				log.Error("missing user info")
 				render.JSON(w, r, response.InternalError())
 				return
 			}

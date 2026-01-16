@@ -10,11 +10,11 @@ import (
 )
 
 type Config struct {
-	Env         string `yaml:"env" env-default:"local"`
-	*HTTPServer `yaml:"http_server"`
-	Routes      map[string]*ProxyRoute `yaml:"routes"`
-	*Websocket  `yaml:"websocket"`
-	*MQTT       `yaml:"mqtt"`
+	Env        string                 `yaml:"env" env-default:"local"`
+	Routes     map[string]*ProxyRoute `yaml:"routes"`
+	HTTPServer `yaml:"http_server"`
+	*Websocket `yaml:"websocket"`
+	*MQTT      `yaml:"mqtt"`
 }
 
 type HTTPServer struct {
@@ -39,7 +39,8 @@ type ProxyRoute struct {
 	Topic            string        `yaml:"topic" env-required:"true"`
 	RequiredScope    string        `yaml:"required_scope"`
 	AdditionalScopes []string      `yaml:"additional_scopes"`
-	Deadline         time.Duration `yaml:"deadline" env-default:"1m"`
+	Deadline         time.Duration `yaml:"deadline" env-required:"true"`
+	Params           []string      `yaml:"params"`
 }
 
 type Websocket struct {
@@ -78,10 +79,10 @@ func MustLoad() *Config {
 		log.Fatalf("config file does not exists by path \"%s\"", fullConfigPath)
 	}
 
-	var cfg Config
-	if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
+	cfg := &Config{}
+	if err := cleanenv.ReadConfig(configPath, cfg); err != nil {
 		log.Fatalf("can not read config: %s", err)
 	}
 
-	return &cfg
+	return cfg
 }
