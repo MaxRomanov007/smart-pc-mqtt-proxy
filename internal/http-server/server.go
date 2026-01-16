@@ -27,15 +27,13 @@ type Server struct {
 }
 
 func New(log *slog.Logger, cfg *config.Config) (*Server, error) {
-	const op = "http-server.New"
-
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
 	router.Use(mwLogger.New(log))
 	router.Use(middleware.Recoverer)
 	router.Use(corsHandler(cfg.HTTPServer.Cors))
 
-	upgrader := createWebsocketUpgrader(log, cfg.Websocket)
+	upgrader := createWebsocketUpgrader(cfg.Websocket)
 
 	for pattern, route := range cfg.Routes {
 		handler := connect.New(log, route, upgrader, cfg.MQTT, cfg.Websocket)
@@ -97,7 +95,7 @@ func corsHandler(cfg *config.Cors) func(http.Handler) http.Handler {
 	})
 }
 
-func createWebsocketUpgrader(log *slog.Logger, cfg *config.Websocket) *websocket.Upgrader {
+func createWebsocketUpgrader(cfg *config.Websocket) *websocket.Upgrader {
 	return &websocket.Upgrader{
 		HandshakeTimeout:  cfg.HandshakeTimeout,
 		ReadBufferSize:    cfg.ReadBufferSize,
