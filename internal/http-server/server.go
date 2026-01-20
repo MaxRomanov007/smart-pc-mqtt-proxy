@@ -31,7 +31,10 @@ func New(log *slog.Logger, cfg *config.Config) (*Server, error) {
 	router.Use(middleware.RequestID)
 	router.Use(mwLogger.New(log))
 	router.Use(middleware.Recoverer)
-	router.Use(corsHandler(cfg.HTTPServer.Cors))
+
+	if cfg.HTTPServer.Cors != nil {
+		router.Use(corsHandler(cfg.HTTPServer.Cors))
+	}
 
 	upgrader := createWebsocketUpgrader(cfg.Websocket)
 

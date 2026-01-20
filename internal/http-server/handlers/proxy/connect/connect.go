@@ -96,6 +96,7 @@ func New(
 		if err != nil {
 			log.Error("failed to create MQTT client", sl.Err(err))
 			render.JSON(w, r, response.InternalError())
+			ws.Close()
 			return
 		}
 
