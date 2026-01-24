@@ -13,7 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type Message struct {
+type WriteMessage struct {
 	Retained bool `json:"retained"`
 	QOS      byte `json:"qos"`
 	Payload  any  `json:"payload"`
@@ -30,14 +30,14 @@ func startWrite(
 	const op = "handlers.proxy.connect.startWrite"
 
 	// buffer
-	msgChan := make(chan *Message, 10)
+	msgChan := make(chan *WriteMessage, 10)
 	errChan := make(chan error, 1)
 
 	// goroutine for reading websocket connection
 	go func() {
 		defer close(msgChan)
 		for {
-			msg := &Message{}
+			msg := &WriteMessage{}
 			err := wsConn.ReadJSON(msg)
 			if err != nil {
 				if errors.Is(err, websocket.ErrCloseSent) ||

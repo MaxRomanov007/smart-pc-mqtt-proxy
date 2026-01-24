@@ -2,12 +2,22 @@ package connect
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gorilla/websocket"
 )
+
+type ReadMessage struct {
+	Duplicate bool   `json:"duplicate"`
+	Qos       byte   `json:"qos"`
+	Retained  bool   `json:"retained"`
+	Topic     string `json:"topic"`
+	MessageID uint16 `json:"message_id"`
+	Payload   any    `json:"payload"`
+}
 
 // startRead subscribes on topic and send messages to websocket connection
 func startRead(
@@ -26,8 +36,22 @@ func startRead(
 
 	// mqtt messages handler
 	handler := func(client mqtt.Client, message mqtt.Message) {
+		var payload any
+		if err := json.Unmarshal(message.Payload(), &payload); err != nil {
+			return
+		}
+
+		m, _ := json.Marshal(ReadMessage{
+			Topic:     message.Topic(),
+			Qos:       message.Qos(),
+			Retained:  message.Retained(),
+			Duplicate: message.Duplicate(),
+			Payload:   payload,
+			MessageID: message.MessageID(),
+		})
+
 		select {
-		case msgChan <- message.Payload():
+		case msgChan <- m:
 		default:
 			// buffer is full
 		}

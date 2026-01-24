@@ -36,23 +36,23 @@ func New(
 ) http.HandlerFunc {
 	const op = "handlers.proxy.New"
 
-	log = log.With(slog.String(sl.OpLogKey, op))
+	creatingLog := log.With(slog.String(sl.OpLogKey, op))
 
 	requiredScopeTemplate, err := template.New("requiredScope").Parse(route.RequiredScope)
 	if err != nil {
-		log.Error("failed to create required scope template for route", sl.Err(err), slog.Any("route", route))
+		creatingLog.Error("failed to create required scope template for route", sl.Err(err), slog.Any("route", route))
 		return nil
 	}
 	topicTemplate, err := template.New("topic").Parse(route.Topic)
 	if err != nil {
-		log.Error("failed to create topic template for route", sl.Err(err), slog.Any("route", route))
+		creatingLog.Error("failed to create topic template for route", sl.Err(err), slog.Any("route", route))
 		return nil
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "handlers.proxy.connect"
 
-		log = log.With(
+		log := log.With(
 			slog.String(sl.OpLogKey, op),
 			slog.String(sl.RequestIdLogKey, middleware.GetReqID(r.Context())),
 		)
