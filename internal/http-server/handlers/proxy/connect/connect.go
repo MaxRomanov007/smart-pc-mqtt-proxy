@@ -33,7 +33,7 @@ func New(
 	mqttCfg *config.MQTT,
 	wsCfg *config.Websocket,
 ) http.HandlerFunc {
-	const op = "handlers.proxy.New"
+	const op = "handlers.proxy.connect.New"
 
 	log := l.With(sl.Op(op))
 

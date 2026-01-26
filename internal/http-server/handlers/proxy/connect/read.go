@@ -35,7 +35,7 @@ func startRead(
 	log *slog.Logger,
 	cfg *StartReadConfig,
 ) error {
-	const op = "handlers.proxy.connect.startRead"
+	const op = "handlers.proxy.connect.read.startRead"
 
 	// buffer
 	msgChan := make(chan []byte, 100)
@@ -67,11 +67,9 @@ func startRead(
 
 func readMessage(log *slog.Logger, msgChan chan<- []byte) mqtt.MessageHandler {
 	return func(client mqtt.Client, message mqtt.Message) {
-		const op = "handlers.proxy.connect.startRead.receiveMessage"
+		const op = "handlers.proxy.connect.read.readMessage"
 
 		log := log.With(sl.Op(op))
-
-		log.Debug("received message", slog.Any("message", message))
 
 		var payload any
 		if err := json.Unmarshal(message.Payload(), &payload); err != nil {
@@ -79,14 +77,18 @@ func readMessage(log *slog.Logger, msgChan chan<- []byte) mqtt.MessageHandler {
 			return
 		}
 
-		m, err := json.Marshal(ReadMessage{
+		messageToSend := ReadMessage{
 			Topic:     message.Topic(),
 			Qos:       message.Qos(),
 			Retained:  message.Retained(),
 			Duplicate: message.Duplicate(),
 			Payload:   payload,
 			MessageID: message.MessageID(),
-		})
+		}
+
+		log.Debug("got message from mqtt", slog.Any("message", messageToSend))
+
+		m, err := json.Marshal(messageToSend)
 		if err != nil {
 			log.Error("failed to marshal output message")
 			return

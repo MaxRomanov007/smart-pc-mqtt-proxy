@@ -34,7 +34,7 @@ func startWrite(
 	log *slog.Logger,
 	cfg *StartWriteConfig,
 ) error {
-	const op = "handlers.proxy.connect.startWrite"
+	const op = "handlers.proxy.connect.write.startWrite"
 
 	// buffer
 	msgChan := make(chan *WriteMessage, 10)
@@ -105,12 +105,16 @@ func readFromWS(
 			switch {
 			case errors.As(err, &syntaxError), errors.As(err, &unmarshalTypeError):
 				log.Warn("failed to read json message: invalid json", sl.Err(err))
-				_ = ws.WriteMessage(websocket.TextMessage, []byte("invalid json"))
+				if err := ws.WriteMessage(websocket.TextMessage, []byte("invalid json")); err != nil {
+					log.Warn("failed to send \"invalid json\" to client", sl.Err(err))
+				}
 				continue
 			}
 			if errors.Is(err, io.ErrUnexpectedEOF) {
 				log.Warn("failed to read json message: unexpected end of JSON input")
-				_ = ws.WriteMessage(websocket.TextMessage, []byte(err.Error()))
+				if err := ws.WriteMessage(websocket.TextMessage, []byte(err.Error())); err != nil {
+					log.Warn("failed to send \"unexpected EOF\" to client", sl.Err(err))
+				}
 				continue
 			}
 
@@ -122,9 +126,13 @@ func readFromWS(
 		}
 		if msg.QOS > 2 {
 			log.Warn("invalid qos", slog.Int("qos", int(msg.QOS)))
-			_ = ws.WriteMessage(websocket.TextMessage, []byte("invalid qos"))
+			if err := ws.WriteMessage(websocket.TextMessage, []byte("invalid qos")); err != nil {
+				log.Warn("failed to send \"invalid qos\" to client", sl.Err(err))
+			}
 			continue
 		}
+
+		log.Debug("got message from ws", slog.Any("message", msg))
 
 		// save message in channel or exit if context done
 		select {
