@@ -24,7 +24,7 @@ func New(log *slog.Logger) func(next http.Handler) http.Handler {
 				slog.String("path", r.URL.Path),
 				slog.String("remote_addr", r.RemoteAddr),
 				slog.String("user_agent", r.UserAgent()),
-				slog.String(sl.RequestIdLogKey, middleware.GetReqID(r.Context())),
+				sl.ReqId(r),
 			)
 			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 

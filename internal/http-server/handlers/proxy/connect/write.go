@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"smart-pc-mqtt-proxy/internal/lib/logger/sl"
 	"strings"
 	"time"
 
@@ -13,19 +15,24 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type StartWriteConfig struct {
+	Topic          string
+	PublishTimeout time.Duration
+	WSConn         *websocket.Conn
+	MQTTClient     mqtt.Client
+}
+
 type WriteMessage struct {
 	Retained bool `json:"retained"`
 	QOS      byte `json:"qos"`
 	Payload  any  `json:"payload"`
 }
 
-// startWrite listen websocket connection and send messages to mqtt topic
+// startWrite listen websocket connection and send messages to mqtt Topic
 func startWrite(
 	ctx context.Context,
-	publishTimeout time.Duration,
-	wsConn *websocket.Conn,
-	mqttClient mqtt.Client,
-	topic string,
+	log *slog.Logger,
+	cfg *StartWriteConfig,
 ) error {
 	const op = "handlers.proxy.connect.startWrite"
 
@@ -36,43 +43,7 @@ func startWrite(
 	// goroutine for reading websocket connection
 	go func() {
 		defer close(msgChan)
-		for {
-			msg := &WriteMessage{}
-			err := wsConn.ReadJSON(msg)
-			if err != nil {
-				if errors.Is(err, websocket.ErrCloseSent) ||
-					websocket.IsCloseError(err, websocket.CloseAbnormalClosure, websocket.CloseNoStatusReceived) ||
-					strings.Contains(err.Error(), "closed network connection") {
-					return
-				}
-				switch err.(type) {
-				case *json.SyntaxError, *json.UnmarshalTypeError:
-					wsConn.WriteMessage(websocket.TextMessage, []byte("invalid json"))
-					continue
-				}
-				if errors.Is(err, io.ErrUnexpectedEOF) {
-					wsConn.WriteMessage(websocket.TextMessage, []byte(err.Error()))
-					continue
-				}
-
-				select {
-				case errChan <- fmt.Errorf("%s: failed to read message from web socket: %w", op, err):
-				default:
-				}
-				return
-			}
-			if msg.QOS > 2 {
-				wsConn.WriteMessage(websocket.TextMessage, []byte("invalid qos"))
-				continue
-			}
-
-			// save message in channel or exit if context done
-			select {
-			case msgChan <- msg:
-			case <-ctx.Done():
-				return
-			}
-		}
+		readFromWS(ctx, log, cfg.WSConn, msgChan, errChan)
 	}()
 
 	for {
@@ -92,18 +63,74 @@ func startWrite(
 			}
 
 			// publish message with timeout
-			token := mqttClient.Publish(topic, msg.QOS, msg.Retained, p)
+			token := cfg.MQTTClient.Publish(cfg.Topic, msg.QOS, msg.Retained, p)
 			select {
 			case <-ctx.Done():
 				return nil
 			default:
-				if !token.WaitTimeout(publishTimeout) {
+				if !token.WaitTimeout(cfg.PublishTimeout) {
 					return fmt.Errorf("%s: mqtt publish timeout", op)
 				}
 				if token.Error() != nil {
 					return fmt.Errorf("%s: mqtt publish error: %w", op, token.Error())
 				}
 			}
+		}
+	}
+}
+
+func readFromWS(
+	ctx context.Context,
+	l *slog.Logger,
+	ws *websocket.Conn,
+	msgChan chan<- *WriteMessage,
+	errChan chan<- error,
+) {
+	const op = "handlers.proxy.connect.write.readFromWS"
+
+	log := l.With(sl.Op(op))
+
+	for {
+		msg := &WriteMessage{}
+		err := ws.ReadJSON(msg)
+		if err != nil {
+			if errors.Is(err, websocket.ErrCloseSent) ||
+				websocket.IsCloseError(err, websocket.CloseAbnormalClosure, websocket.CloseNoStatusReceived) ||
+				strings.Contains(err.Error(), "closed network connection") {
+				log.Info("connection closed")
+				return
+			}
+			var syntaxError *json.SyntaxError
+			var unmarshalTypeError *json.UnmarshalTypeError
+			switch {
+			case errors.As(err, &syntaxError), errors.As(err, &unmarshalTypeError):
+				log.Warn("failed to read json message: invalid json", sl.Err(err))
+				_ = ws.WriteMessage(websocket.TextMessage, []byte("invalid json"))
+				continue
+			}
+			if errors.Is(err, io.ErrUnexpectedEOF) {
+				log.Warn("failed to read json message: unexpected end of JSON input")
+				_ = ws.WriteMessage(websocket.TextMessage, []byte(err.Error()))
+				continue
+			}
+
+			select {
+			case errChan <- fmt.Errorf("%s: failed to read message from web socket: %w", op, err):
+			default:
+			}
+			return
+		}
+		if msg.QOS > 2 {
+			log.Warn("invalid qos", slog.Int("qos", int(msg.QOS)))
+			_ = ws.WriteMessage(websocket.TextMessage, []byte("invalid qos"))
+			continue
+		}
+
+		// save message in channel or exit if context done
+		select {
+		case msgChan <- msg:
+		case <-ctx.Done():
+			return
 		}
 	}
 }

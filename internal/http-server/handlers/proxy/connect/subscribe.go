@@ -13,23 +13,30 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type StartSubscribeConfig struct {
+	SubscribeMode    string
+	Deadline         time.Duration
+	SubscribeTimeout time.Duration
+	WriteTimeout     time.Duration
+	PublishTimeout   time.Duration
+	WSConn           *websocket.Conn
+	MQTTClient       mqtt.Client
+	Topic            string
+}
+
 // startSubscribe running startRead or/and startWrite according to subscribeMode
 func startSubscribe(
 	ctx context.Context,
 	log *slog.Logger,
-	subscribeMode string,
-	deadline, subscribeTimeout, writeTimeout, publishTimeout time.Duration,
-	wsConn *websocket.Conn,
-	mqttClient mqtt.Client,
-	topic string,
+	cfg *StartSubscribeConfig,
 ) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	// if deadline exists, add timeout to context
-	if deadline > 0 {
+	if cfg.Deadline > 0 {
 		var cancelDeadline context.CancelFunc
-		ctx, cancelDeadline = context.WithTimeout(ctx, deadline)
+		ctx, cancelDeadline = context.WithTimeout(ctx, cfg.Deadline)
 		defer cancelDeadline()
 	}
 
@@ -38,17 +45,23 @@ func startSubscribe(
 
 	shutdown := func() {
 		cancel()
-		mqttClient.Disconnect(250)
+		cfg.MQTTClient.Disconnect(250)
 		wg.Wait()
-		wsConn.Close()
+		_ = cfg.WSConn.Close()
 	}
 
-	switch subscribeMode {
+	switch cfg.SubscribeMode {
 	case modeRead:
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := startRead(ctx, subscribeTimeout, writeTimeout, wsConn, mqttClient, topic); err != nil {
+			if err := startRead(ctx, log, &StartReadConfig{
+				Topic:            cfg.Topic,
+				MQQTClient:       cfg.MQTTClient,
+				WSConn:           cfg.WSConn,
+				SubscribeTimeout: cfg.SubscribeTimeout,
+				WriteTimeout:     cfg.WriteTimeout,
+			}); err != nil {
 				select {
 				case errCh <- fmt.Errorf("read error: %w", err):
 				default:
@@ -60,7 +73,12 @@ func startSubscribe(
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := startWrite(ctx, publishTimeout, wsConn, mqttClient, topic); err != nil {
+			if err := startWrite(ctx, log, &StartWriteConfig{
+				Topic:          cfg.Topic,
+				PublishTimeout: cfg.PublishTimeout,
+				WSConn:         cfg.WSConn,
+				MQTTClient:     cfg.MQTTClient,
+			}); err != nil {
 				select {
 				case errCh <- fmt.Errorf("write error: %w", err):
 				default:
@@ -72,7 +90,13 @@ func startSubscribe(
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			if err := startRead(ctx, subscribeTimeout, writeTimeout, wsConn, mqttClient, topic); err != nil {
+			if err := startRead(ctx, log, &StartReadConfig{
+				Topic:            cfg.Topic,
+				MQQTClient:       cfg.MQTTClient,
+				WSConn:           cfg.WSConn,
+				SubscribeTimeout: cfg.SubscribeTimeout,
+				WriteTimeout:     cfg.WriteTimeout,
+			}); err != nil {
 				select {
 				case errCh <- fmt.Errorf("read error: %w", err):
 				default:
@@ -81,7 +105,12 @@ func startSubscribe(
 		}()
 		go func() {
 			defer wg.Done()
-			if err := startWrite(ctx, publishTimeout, wsConn, mqttClient, topic); err != nil {
+			if err := startWrite(ctx, log, &StartWriteConfig{
+				Topic:          cfg.Topic,
+				PublishTimeout: cfg.PublishTimeout,
+				WSConn:         cfg.WSConn,
+				MQTTClient:     cfg.MQTTClient,
+			}); err != nil {
 				select {
 				case errCh <- fmt.Errorf("write error: %w", err):
 				default:

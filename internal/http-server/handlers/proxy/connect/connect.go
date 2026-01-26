@@ -16,7 +16,6 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
 	"github.com/gorilla/websocket"
 )
@@ -28,7 +27,7 @@ const (
 )
 
 func New(
-	log *slog.Logger,
+	l *slog.Logger,
 	route *config.ProxyRoute,
 	upgrader *websocket.Upgrader,
 	mqttCfg *config.MQTT,
@@ -36,26 +35,23 @@ func New(
 ) http.HandlerFunc {
 	const op = "handlers.proxy.New"
 
-	creatingLog := log.With(slog.String(sl.OpLogKey, op))
+	log := l.With(sl.Op(op))
 
 	requiredScopeTemplate, err := template.New("requiredScope").Parse(route.RequiredScope)
 	if err != nil {
-		creatingLog.Error("failed to create required scope template for route", sl.Err(err), slog.Any("route", route))
+		log.Error("failed to create required scope template for route", sl.Err(err), slog.Any("route", route))
 		return nil
 	}
-	topicTemplate, err := template.New("topic").Parse(route.Topic)
+	topicTemplate, err := template.New("Topic").Parse(route.Topic)
 	if err != nil {
-		creatingLog.Error("failed to create topic template for route", sl.Err(err), slog.Any("route", route))
+		log.Error("failed to create Topic template for route", sl.Err(err), slog.Any("route", route))
 		return nil
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "handlers.proxy.connect"
 
-		log := log.With(
-			slog.String(sl.OpLogKey, op),
-			slog.String(sl.RequestIdLogKey, middleware.GetReqID(r.Context())),
-		)
+		log := l.With(sl.Op(op), sl.ReqId(r))
 
 		params, err := urlParams(r, route.Params)
 		if err != nil {
@@ -96,13 +92,13 @@ func New(
 		if err != nil {
 			log.Error("failed to create MQTT client", sl.Err(err))
 			render.JSON(w, r, response.InternalError())
-			ws.Close()
+			_ = ws.Close()
 			return
 		}
 
 		topic, err := executeTemplate(topicTemplate, params)
 		if err != nil {
-			log.Error("failed to execute topic template", sl.Err(err))
+			log.Error("failed to execute Topic template", sl.Err(err))
 			render.JSON(w, r, response.InternalError())
 			return
 		}
@@ -110,22 +106,24 @@ func New(
 		topic = "users/" + userId + "/" + topic
 
 		log.Info(
-			"subscribing to topic",
-			slog.String("topic", topic),
+			"subscribing to Topic",
+			slog.String("Topic", topic),
 			slog.String("mode", subscribeMode),
 		)
 
 		startSubscribe(
 			r.Context(),
 			log,
-			subscribeMode,
-			route.Deadline,
-			mqttCfg.Timeout.Subscribe,
-			wsCfg.Timeout.Write,
-			mqttCfg.Timeout.Publish,
-			ws,
-			mqttClient,
-			topic,
+			&StartSubscribeConfig{
+				Topic:            topic,
+				WSConn:           ws,
+				MQTTClient:       mqttClient,
+				SubscribeMode:    subscribeMode,
+				Deadline:         route.Deadline,
+				SubscribeTimeout: mqttCfg.Timeout.Subscribe,
+				WriteTimeout:     wsCfg.Timeout.Write,
+				PublishTimeout:   mqttCfg.Timeout.Publish,
+			},
 		)
 	}
 }
