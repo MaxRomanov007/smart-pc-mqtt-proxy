@@ -7,13 +7,15 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
+	"time"
+
 	"smart-pc-mqtt-proxy/internal/config"
 	"smart-pc-mqtt-proxy/internal/http-server/handlers/proxy/connect"
+	"smart-pc-mqtt-proxy/internal/http-server/handlers/proxy/send"
 	mwAuth "smart-pc-mqtt-proxy/internal/http-server/middlewares/auth"
 	mwLogger "smart-pc-mqtt-proxy/internal/http-server/middlewares/logger"
 	"smart-pc-mqtt-proxy/internal/lib/logger/sl"
-	"syscall"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -47,6 +49,9 @@ func New(log *slog.Logger, cfg *config.Config) (*Server, error) {
 		router.
 			With(mwAuth.New(log, route.AdditionalScopes...)).
 			Get(pattern, connect.New(log, route, upgrader, cfg.MQTT, cfg.Websocket))
+
+		router.With(mwAuth.New(log, route.AdditionalScopes...)).
+			Post(pattern, send.New(log, route, cfg.MQTT))
 	}
 
 	srv := &http.Server{

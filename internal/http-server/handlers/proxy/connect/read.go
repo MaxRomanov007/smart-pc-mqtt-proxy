@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"smart-pc-mqtt-proxy/internal/lib/logger/sl"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gorilla/websocket"
+	"smart-pc-mqtt-proxy/internal/lib/logger/sl"
 )
 
 type StartReadConfig struct {
@@ -24,7 +24,7 @@ type ReadMessage struct {
 	Duplicate bool   `json:"duplicate"`
 	Qos       byte   `json:"qos"`
 	Retained  bool   `json:"retained"`
-	Topic     string `json:"Topic"`
+	Topic     string `json:"topic"`
 	MessageID uint16 `json:"message_id"`
 	Payload   any    `json:"payload"`
 }
